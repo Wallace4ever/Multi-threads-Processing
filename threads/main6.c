@@ -1,0 +1,126 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<unistd.h>
+#include<pthread.h>
+#include<semaphore.h>
+
+#define NUM 100000000
+#define N 2  //开始的时候想用for循环控制两个reader进程 但是还有问题 暂时保留
+long long int sum1 =0,sum2=0,sumread1=0,sumread2=0;
+int number01=0,number02=0;
+
+int buffer[NUM]={0};  // 创建共享缓冲区 数组 在最后设置两个位置是留给标记的
+int read_i1=0,read_i2=50000000,write_i1,write_i2; // 数组中标记读写的位置
+sem_t sem_read1,sem_read2;     // 同步信号量， 当满了时阻止生产者放产品
+sem_t sem_write1,sem_write2;    // 同步信号量， 当没产品时阻止消费者消费
+pthread_mutex_t mutex;  // 互斥信号量， 一次只有一个线程访问缓冲
+
+/*生产者写入数据*/
+void * writer1()
+{
+  int n;
+  for (n = 0; n <=49999999; n++)
+  {
+  sem_wait(&sem_write1);
+
+  buffer[write_i1] = n;
+  //printf("writer1 %d\n", buffer[write_i1]);
+  sum1 += 1;
+  write_i1++;
+
+  sem_post(&sem_read1);
+}
+  return NULL;
+}
+
+/*生产者写入数据*/
+void * writer2()
+{
+  int n;
+  for (n = 50000000; n <=99999999; n++)
+{
+  sem_wait(&sem_write2);
+
+
+
+  buffer[write_i2] = n;
+  //printf("writer2 %d\n", buffer[write_i2]);
+  sum2 += 1;
+write_i2++;
+
+  sem_post(&sem_read2);
+}
+  return NULL;
+}
+
+/*消费者读取数据 （线程1）*/
+void *reader1()
+{
+
+  for(;read_i1<=49999999;read_i1++)
+{
+  sem_wait(&sem_read1);
+  number01 = buffer[read_i1];
+
+  sem_post(&sem_write1);
+  sumread1 += 1;
+
+  //printf("reader1 %d\n", number01);
+
+}
+return NULL;
+}
+
+/*消费者读取数据 （线程2）*/
+void *reader2()
+{
+
+  for(;read_i2<=99999999;read_i2++)
+{
+  sem_wait(&sem_read2);
+  number02 = buffer[read_i2];
+
+  sem_post(&sem_write2);
+  sumread2 += 1;
+
+  //printf("reader2 %d\n", number02);
+
+}
+return NULL;
+}
+
+int main(void)
+{
+  pthread_t th_write1,th_write2, th_reader1,th_reader2;
+  void * retval;
+  int i,readers;
+  sem_init(&sem_write1, 0, NUM/2 );      //初始化同步信号量
+  sem_init(&sem_write2, 0, NUM/2 ); 
+  sem_init(&sem_read1, 0, 0);          //初始化同步信号量
+  sem_init(&sem_read2, 0, 0);
+  pthread_mutex_init(&mutex, NULL);   //初始化互斥信号量
+  read_i1 = 0;
+  read_i2 = 50000000;                         //初始化消费者数组指针（其实就是数组中的标记）
+  write_i1 = 0;                        //初始化生产者数组指针（同上）
+  write_i2 = 50000000;
+
+//创建1个生产者和2个消费者线程
+  pthread_create(&th_write1, NULL, writer1, NULL);
+  pthread_create(&th_write2, NULL, writer2, NULL);
+  pthread_create(&th_reader1, NULL, reader1, NULL);
+  pthread_create(&th_reader2, NULL, reader2, NULL);
+
+//销毁所有线程
+  (void)pthread_join(th_write1, &retval);
+  (void)pthread_join(th_write2, &retval);
+  (void)pthread_join(th_reader1, &retval);
+  (void)pthread_join(th_reader2, &retval);
+
+//输出写入总量 与 取出总量 （因为设为了全局变量 不受线程销毁的影响）
+  printf("writer1 sum is %lld \n", sum1);
+  printf("writer2 sum is %lld \n", sum2);
+  printf("reader1 sum is %lld \n", sumread1);
+  printf("reader2 sum is %lld \n", sumread2);
+
+return 0;
+}
